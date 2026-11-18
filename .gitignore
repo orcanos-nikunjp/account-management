@@ -14,3 +14,7 @@ next-env.d.ts
 
 .DS_Store
 Thumbs.db
+
+# local AI Projects index (generated, PC-specific paths)
+INDEX.html
+index_pages/
