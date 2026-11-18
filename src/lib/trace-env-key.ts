@@ -105,7 +105,7 @@ export const TRACE_ENV_DEFAULTS: StoredTraceEnvs = {
         // Staging is EU-only (stage.orcanos.com, 2026-11-18): no US instance, so US accounts
         // are absent while staging is active and creating a US account there is refused.
         us: inst('', ''),
-        eu: inst('https://stage.orcanos.com', 'https://stage.orcanos.com'),
+        eu: inst('https://stage.orcanos.com/traceability', 'https://stage.orcanos.com/traceability'),
       },
     },
     aws_prod: {
@@ -113,8 +113,8 @@ export const TRACE_ENV_DEFAULTS: StoredTraceEnvs = {
       db: 'postgres',
       note: '',
       regions: {
-        us: inst('https://ushub.orcanos.com', 'https://ushub.orcanos.com'),
-        eu: inst('https://hub.orcanos.com', 'https://hub.orcanos.com'),
+        us: inst('https://ushub.orcanos.com/traceability', 'https://ushub.orcanos.com/traceability'),
+        eu: inst('https://hub.orcanos.com/traceability', 'https://hub.orcanos.com/traceability'),
       },
     },
   },
