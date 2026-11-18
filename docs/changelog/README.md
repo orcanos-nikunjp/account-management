@@ -9,6 +9,7 @@ the `release-management` convention.
 
 | Version | Date | Summary |
 |---|---|---|
+| `1.13.0` | 2026-11-18 | **Traceability environment switch** (`/environment`): Fly.io + SQLite / AWS Staging + PostgreSQL / AWS Production + PostgreSQL, URLs + encrypted admin passwords per region in master `platform_settings` `trace_environments`; one active for everyone; *Test connection*; sidebar banner. |
 | `1.12.0` | 2026-11-13 | **AI credit limits**: default daily/weekly/monthly limits on `/credits` (1,000 / 3,000 / 10,000), per-account own limits on the new *Credit limits* tab, override dialog on default change; enforced by Ask Paul + Traceability (combined usage). |
 | `1.11.1` | 2026-11-13 | **Accounts list totals footer** — count of listed accounts (of all, when filtered), total spend and tokens. |
 | `1.11.0` | 2026-11-13 | **Account type** (Customer / Partner / Demo / Sandbox) — *Type* column + filter on Accounts and Usage (master `platform_settings` `account_kind:<tenant>`, default Customer). Also ships the four entries below. |

@@ -20,9 +20,9 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: Request, ctx: { params: Promise<{ tenant: string }> }) {
   const { user, error } = await requirePlatformStaff();
   if (error) return error;
-  if (!traceConfigured()) {
+  if (!(await traceConfigured())) {
     return Response.json(
-      { detail: 'Traceability is not connected (TRACE_API_URL / TRACE_ADMIN_PASSWORD).' },
+      { detail: 'Traceability is not connected in the active environment (see the Environment screen).' },
       { status: 503 },
     );
   }

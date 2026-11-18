@@ -56,6 +56,7 @@ export const AUDIT_EVENT_GROUPS: readonly AuditEventGroup[] = [
       'orcanos_login_tested',
       'trace_ai_config_changed',
       'trace_ai_key_tested',
+      'trace_environment_tested',
       // Written by the QMS backend against the same table.
       'llm_key_set',
       'llm_key_revealed',

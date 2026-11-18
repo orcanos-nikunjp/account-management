@@ -65,7 +65,7 @@ export async function GET(req: Request) {
       notes.push(`Ask Paul usage unavailable: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  if (traceTenant && region && traceRegions().includes(region)) {
+  if (traceTenant && region && (await traceRegions()).includes(region)) {
     try {
       const t = await getTraceCreditUsage(tenant, region);
       Object.assign(traceability, t.by_app?.traceability ?? {});

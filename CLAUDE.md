@@ -4,7 +4,7 @@ Read this before changing anything here. **This file is the source of truth** fo
 how to work in this repo; the other docs go deeper on one topic each.
 
 ### Current versions (update after every bump)
-- **App:** `1.12.0`
+- **App:** `1.13.0`
 
 Release history is **not** kept in this file — it is
 [`docs/changelog/CHANGELOG-v1.md`](docs/changelog/CHANGELOG-v1.md) (long form; v0.x in `CHANGELOG-v0.md`) and
@@ -443,8 +443,8 @@ orca60 (`schemaDriftNote`). Full account: [SCHEMA.md §6](SCHEMA.md#6-sqlbootstr
 ## ⚠️ Data residency (`accounts.region`) — nothing here fails loudly
 
 `region` is `'us'` or `'eu'` and it is **one decision three unrelated stores must obey**: the
-tenant's own Supabase project, which of the **two traceability Fly apps** holds its
-`account_access` row (`TRACE_API_URL` = us, `TRACE_API_URL_EU` = eu), and eventually which LLM
+tenant's own Supabase project, which **regional traceability instance of the active environment**
+holds its `account_access` row (see *Traceability environment* below), and eventually which LLM
 endpoint its AI calls may reach. Full account: [SCHEMA.md](SCHEMA.md) → *`region` is immutable*,
 and the header comment in [`src/lib/regions.ts`](src/lib/regions.ts).
 
@@ -454,8 +454,8 @@ instance simply appears not to exist. A US LLM call for an EU tenant returns a n
 the invariants are enforced structurally, and each one will look like pointless strictness until
 it saves you:
 
-- **No fallback between regions, ever.** `traceApiUrlFor()` returns `null` rather than the other
-  region's URL, and `lib/trace.ts` throws. A fallback here writes EU data to the US.
+- **No fallback between regions, ever.** A region the active environment has no URL + password for
+  is absent (`traceRegions()`), and `lib/trace.ts` throws. A fallback here writes EU data to the US.
 - **`parseRegion` (refuse) vs `coerceRegion` (default to `us`)** are different functions on
   purpose. User input gets the first; a row written before the migration gets the second.
 - **A write follows the row it was read from.** `listTraceAccounts()` tags every row with its
@@ -487,7 +487,27 @@ it saves you:
 
 Still outstanding before an EU customer can be onboarded: the EU Fly app's **EU-only** Litestream
 bucket (Tigris replicates globally by default), region-routing for AI calls, and an EU Ask Paul
-deployment. Until `TRACE_API_URL_EU` is set, `POST /api/accounts` refuses `region: 'eu'`.
+deployment. Until the active environment has an EU instance, `POST /api/accounts` refuses `region: 'eu'`.
+
+## ⚠️ Traceability environment (1.13.0) — Fly.io → Orcanos AWS
+
+Traceability is moving from Fly.io + SQLite to the Orcanos AWS environment + PostgreSQL. `/environment`
+picks **one active environment for everyone**: `fly` (Fly.io + SQLite), `aws_staging`
+(`stage.orcanos.com`), `aws_prod` (`ushub.orcanos.com` = US, `hub.orcanos.com` = EU). Each has, per
+region, an admin API URL, an admin password (AES-GCM, never returned) and the user-facing app URL.
+Stored in master `platform_settings` key `trace_environments` (`lib/trace-env.ts`, shapes in
+client-safe `lib/trace-env-key.ts`); every trace call resolves it (15 s cache per instance).
+- **This app never opens the trace database** — SQLite vs Postgres is a label here, not a code path.
+- **All accounts move at once** (one DB per environment). Switching shows the *other* database's
+  accounts; it copies nothing. The data move is done on the traceability side.
+- **No fallback between environments.** AWS unreachable = an error banner, never a read of Fly —
+  that would show accounts as missing and write licences into the wrong database.
+- **Fly falls back to the old env vars** when its fields are blank (`TRACE_API_URL(_EU)`,
+  `TRACE_ADMIN_PASSWORD(_EU)`); AWS never does. No `trace_environments` row = Fly = pre-1.13.0 behaviour.
+- `traceRegions()` / `traceConfigured()` are **async** since 1.13.0 — always `await` them; a missing
+  `await` on `traceConfigured()` is a Promise, always truthy, and silently skips the "not connected" path.
+- The token cache is keyed `env|region|url`; *Test connection* sends a **stored** password only to
+  its **stored** URL (typed URL needs a typed password).
 
 ## Non-obvious behaviour worth preserving
 

@@ -6,9 +6,9 @@
  *
  *   1. **The tenant's own Supabase project** (Ask Paul's vector DB) — created in
  *      `supabaseRegionFor(region)` by `lib/provisioning.ts`.
- *   2. **The traceability instance's SQLite** — a separate Fly app per region,
- *      each with its own volume and Litestream bucket. `traceApiUrlFor(region)`
- *      says which one owns this tenant's `account_access` row.
+ *   2. **The traceability instance's database** — a separate instance per region
+ *      in the active traceability environment (Fly + SQLite, or AWS + Postgres;
+ *      `lib/trace-env.ts`), which owns this tenant's `account_access` row.
  *   3. **LLM calls** made for that tenant — an EU tenant must not reach a US
  *      endpoint, because requirement text and trainee names travel in the
  *      prompt.
@@ -90,35 +90,17 @@ export function supabaseRegionFor(region: DataRegion): string {
 }
 
 /**
- * The traceability instance that owns this region's tenants.
+ * The traceability instance that owns a region's tenants is no longer an env var read here:
+ * it belongs to the ACTIVE traceability environment (Fly.io + SQLite, AWS Staging, AWS
+ * Production) — `lib/trace-env.ts`, chosen on the Environment screen. The no-fallback rule is
+ * unchanged: a region the active environment has no instance for is absent, never the other
+ * region's and never another environment's.
  *
- * `TRACE_API_URL` is the US app, kept under its original name so no existing
- * deployment breaks. `TRACE_API_URL_EU` is the Fly app in `fra`. When the EU app
- * is not configured yet this returns `null` rather than falling back to the US
- * one — a fallback here would write an EU tenant's row into the US database,
- * which is the exact thing this module exists to prevent.
+ * Ask Paul's front door per region. `null` = no deployment in that region; an EU tenant must
+ * NOT be sent to the US one. The Traceability link comes from the active environment
+ * (`TraceSourceStatus.app_urls`), because it moves with the Fly → AWS switch.
  */
-export function traceApiUrlFor(region: DataRegion): string | null {
-  const url = region === 'eu' ? process.env.TRACE_API_URL_EU : process.env.TRACE_API_URL;
-  return url?.replace(/\/$/, '') || null;
-}
-
-/**
- * Where each product's front door is, per region — what the accounts list's
- * "open" links point at. Plain URLs, no tenant or session carried: the product's
- * own sign-in decides who gets in.
- *
- * `null` means that product has no deployment in that region. Ask Paul has no EU
- * deployment yet, and an EU tenant must NOT be sent to the US one — the same
- * no-fallback rule as `traceApiUrlFor`.
- */
-export const APP_URLS: Record<DataRegion, { ask_paul: string | null; traceability: string | null }> = {
-  us: {
-    ask_paul: 'https://askpaul.orcanos.ai',
-    traceability: 'https://traceability.orcanos.ai',
-  },
-  eu: {
-    ask_paul: null,
-    traceability: 'https://eu.traceability.orcanos.ai',
-  },
+export const ASK_PAUL_URLS: Record<DataRegion, string | null> = {
+  us: 'https://askpaul.orcanos.ai',
+  eu: null,
 };

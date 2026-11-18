@@ -200,6 +200,10 @@ export interface TraceSourceStatus {
   supports_sbom: boolean;
   /** Which instance answered — shown in the UI so local-vs-Fly is never a guess. */
   url: string | null;
+  /** The active traceability environment (Fly + SQLite / AWS Staging / AWS Production). */
+  environment: { key: string; label: string; db: 'sqlite' | 'postgres' } | null;
+  /** The Traceability link users open, per region, in the active environment. null = none there. */
+  app_urls: Record<DataRegion, string | null>;
   message: string;
 }
 

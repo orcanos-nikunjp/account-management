@@ -62,7 +62,8 @@
 import { requirePlatformStaff } from '@/lib/session';
 import { pgGet, pgPatch } from '@/lib/supabase';
 import { logSecurityEvent } from '@/lib/audit';
-import { parseRegion, traceApiUrlFor } from '@/lib/regions';
+import { parseRegion } from '@/lib/regions';
+import { traceRegions } from '@/lib/trace';
 import type { MoveEvent, MoveStepKey } from '@/lib/move-steps';
 import type { DataRegion } from '@/lib/types';
 import {
@@ -95,8 +96,8 @@ export async function POST(req: Request) {
 
   const to = parseRegion(body.to_region);
   if (!to) return bad(`Unknown region '${String(body.to_region)}'. Expected 'us' or 'eu'.`);
-  if (!traceApiUrlFor(to)) {
-    return bad(`The ${to.toUpperCase()} region is not configured on this console.`);
+  if (!(await traceRegions()).includes(to)) {
+    return bad(`The ${to.toUpperCase()} region has no instance in the active traceability environment.`);
   }
 
   // Where it is now, taken from the instances themselves rather than from master.

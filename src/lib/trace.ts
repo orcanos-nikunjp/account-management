@@ -18,15 +18,18 @@
  * US database, so there are two independent Fly apps with two independent
  * volumes and nothing syncing them:
  *
- *   `TRACE_API_URL`     + `TRACE_ADMIN_PASSWORD`     → us  (Fly `iad`, :8010 in dev)
- *   `TRACE_API_URL_EU`  + `TRACE_ADMIN_PASSWORD_EU`  → eu  (Fly `fra`)
+ *   us / eu instance of the ACTIVE traceability environment — `lib/trace-env.ts`:
+ *     Fly.io + SQLite (default; blank values fall back to `TRACE_API_URL(_EU)` +
+ *     `TRACE_ADMIN_PASSWORD(_EU)`), AWS Staging + Postgres, AWS Production + Postgres.
+ *   Chosen on the Environment screen (1.13.0). The token cache is keyed by
+ *   environment + region + URL, so a switch never reuses the old environment's token.
  *
  * Each deployment has its OWN admin password. The two databases never travel
  * together, so one password covering both would mean a single leak opens both
  * regions' admin APIs.
  *
  * Every function here therefore names the region it acts on. **There is no
- * default and no fallback** — see `traceApiUrlFor()` in `lib/regions.ts` for
+ * default and no fallback** — see `lib/trace-env.ts` (the active environment) for
  * why a fallback would be the bug rather than the safety net.
  *
  * `listTraceAccounts()` is the one that fans OUT: the console is global, so it
@@ -43,8 +46,8 @@
  * minted by one is meaningless to the other.
  */
 
-import { traceAdminPasswordFor } from './env';
-import { DATA_REGIONS, traceApiUrlFor } from './regions';
+import { DATA_REGIONS } from './regions';
+import { activeTraceEnv, type ResolvedTraceEnv } from './trace-env';
 import type { DataRegion, ModuleKey } from './types';
 
 /** One row of the trace app's `account_access` table, as its admin API returns it. */
@@ -309,7 +312,7 @@ async function traceFetch(
         continue;
       }
       if (!(e instanceof TypeError)) throw e;
-      const base = baseUrl(region);
+      const base = url.replace(/\/api\/admin\/.*$/, '');
       throw new TraceApiError(
         `Could not reach the ${region.toUpperCase()} traceability instance: ` +
           `${describeNetworkError(code)}${attempt > 1 ? ' (twice)' : ''}.`,
@@ -325,16 +328,19 @@ async function traceFetch(
  * variable. Never falls back to the other region — a write that lands in the
  * wrong region is invisible, and a thrown error is not.
  */
-function baseUrl(region: DataRegion): string {
-  const url = traceApiUrlFor(region);
-  if (!url) {
+async function target(region: DataRegion): Promise<{ env: ResolvedTraceEnv; url: string; password: string; cacheKey: string }> {
+  const env = await activeTraceEnv();
+  const r = env.regions[region];
+  if (!r.api_url || !r.password) {
     throw new TraceApiError(
-      `No traceability instance is configured for the ${region.toUpperCase()} region ` +
-        `(set ${region === 'eu' ? 'TRACE_API_URL_EU' : 'TRACE_API_URL'}).`,
+      `No traceability instance is configured for the ${region.toUpperCase()} region in the ` +
+        `active environment "${env.label}" (${r.missing_hint}).`,
       0,
     );
   }
-  return url;
+  // The token is tied to environment + URL, so switching environments never reuses a token
+  // minted by the previous one.
+  return { env, url: r.api_url, password: r.password, cacheKey: `${env.key}|${region}|${r.api_url}` };
 }
 
 /**
@@ -345,16 +351,16 @@ function baseUrl(region: DataRegion): string {
  * Keyed by region — the two instances are separate deployments and a token
  * minted against one proves nothing to the other.
  */
-const cachedTokens = new Map<DataRegion, string>();
+const cachedTokens = new Map<string, string>();
 
-async function login(region: DataRegion): Promise<string> {
+async function login(region: DataRegion, t: { env: ResolvedTraceEnv; url: string; password: string }): Promise<string> {
   const res = await traceFetch(
     region,
-    `${baseUrl(region)}/api/admin/login`,
+    `${t.url}/api/admin/login`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: traceAdminPasswordFor(region) }),
+      body: JSON.stringify({ password: t.password }),
       cache: 'no-store',
     },
     true,
@@ -362,8 +368,8 @@ async function login(region: DataRegion): Promise<string> {
   if (!res.ok) {
     throw new TraceApiError(
       res.status === 401
-        ? `${region === 'eu' ? 'TRACE_ADMIN_PASSWORD_EU' : 'TRACE_ADMIN_PASSWORD'} was rejected `+
-          `by the ${region.toUpperCase()} traceability API.`
+        ? `The ${region.toUpperCase()} admin password of "${t.env.label}" was rejected ` +
+          `by its traceability API (${t.url}).`
         : `Traceability admin login failed for ${region.toUpperCase()} (HTTP ${res.status}).`,
       res.status,
     );
@@ -379,16 +385,17 @@ async function call<T>(
   init: RequestInit = {},
   retry = true,
 ): Promise<T> {
-  let token = cachedTokens.get(region);
+  const t = await target(region);
+  let token = cachedTokens.get(t.cacheKey);
   if (!token) {
-    token = await login(region);
-    cachedTokens.set(region, token);
+    token = await login(region, t);
+    cachedTokens.set(t.cacheKey, token);
   }
 
   const method = (init.method ?? 'GET').toUpperCase();
   const res = await traceFetch(
     region,
-    `${baseUrl(region)}${path}`,
+    `${t.url}${path}`,
     {
       ...init,
       headers: {
@@ -403,7 +410,7 @@ async function call<T>(
 
   // A 401 here means the password changed under us. Drop the token and try once.
   if (res.status === 401 && retry) {
-    cachedTokens.delete(region);
+    cachedTokens.delete(t.cacheKey);
     return call<T>(region, path, init, false);
   }
   if (!res.ok) {
@@ -425,12 +432,9 @@ async function call<T>(
  * would mean a single leak opens both admin APIs — so a half-configured region
  * is treated as absent rather than being called with the other's credentials.
  */
-export function traceRegions(): DataRegion[] {
-  return DATA_REGIONS.filter(
-    (r) =>
-      traceApiUrlFor(r) &&
-      (r === 'eu' ? process.env.TRACE_ADMIN_PASSWORD_EU : process.env.TRACE_ADMIN_PASSWORD),
-  );
+export async function traceRegions(): Promise<DataRegion[]> {
+  const env = await activeTraceEnv();
+  return DATA_REGIONS.filter((r) => Boolean(env.regions[r].api_url && env.regions[r].password));
 }
 
 /**
@@ -445,7 +449,7 @@ export function traceRegions(): DataRegion[] {
  * is the honest outcome. Same reasoning as `moduleFlag()`: unknown is not off.
  */
 export async function listTraceAccounts(): Promise<TraceAccountRow[]> {
-  const regions = traceRegions();
+  const regions = await traceRegions();
   const perRegion = await Promise.all(
     regions.map(async (region) => {
       const data = await call<{ accounts?: TraceAccountRow[] }>(region, '/api/admin/accounts');
@@ -768,7 +772,7 @@ export async function upsertRegionDirectory(
 
   const failed: DataRegion[] = [];
   await Promise.all(
-    traceRegions().map(async (target) => {
+    (await traceRegions()).map(async (target) => {
       try {
         await call(target, '/api/admin/regions', {
           method: 'POST',
@@ -864,7 +868,7 @@ export async function deleteRegionDirectory(tenant: string): Promise<{ failed: D
   if (!name) return { failed: [] };
   const failed: DataRegion[] = [];
   await Promise.all(
-    traceRegions().map(async (target) => {
+    (await traceRegions()).map(async (target) => {
       try {
         await call(target, `/api/admin/regions/${encodeURIComponent(name)}`, { method: 'DELETE' });
       } catch (e) {
@@ -989,8 +993,45 @@ export async function getTraceCreditUsage(
  * is the normal state today, and the console must keep working while the EU one
  * does not exist yet.
  */
-export function traceConfigured(): boolean {
-  return traceRegions().length > 0;
+export async function traceConfigured(): Promise<boolean> {
+  return (await traceRegions()).length > 0;
+}
+
+/**
+ * Log in to one instance with explicit credentials and count its accounts — the Environment
+ * screen's *Test connection*. Uses no token cache and never touches the active environment, so
+ * an environment can be checked before switching to it.
+ */
+export async function testTraceInstance(
+  region: DataRegion,
+  url: string,
+  password: string,
+): Promise<{ ok: true; accounts: number; ms: number } | { ok: false; error: string }> {
+  const started = Date.now();
+  try {
+    const res = await traceFetch(
+      region,
+      `${url}/api/admin/login`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }), cache: 'no-store' },
+      true,
+    );
+    if (!res.ok) {
+      return { ok: false, error: res.status === 401 ? 'The admin password was rejected (HTTP 401).' : `Login failed (HTTP ${res.status}).` };
+    }
+    const token = ((await res.json()) as { token?: string }).token;
+    if (!token) return { ok: false, error: 'Login returned no token — is this a traceability admin API?' };
+    const list = await traceFetch(
+      region,
+      `${url}/api/admin/accounts`,
+      { headers: { 'X-Admin-Token': token }, cache: 'no-store' },
+      true,
+    );
+    if (!list.ok) return { ok: false, error: `Listing accounts failed (HTTP ${list.status}).` };
+    const data = (await list.json()) as { accounts?: unknown[] };
+    return { ok: true, accounts: data.accounts?.length ?? 0, ms: Date.now() - started };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /**

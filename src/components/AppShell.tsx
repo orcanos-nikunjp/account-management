@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import OrcanosLogo from './OrcanosLogo';
 import ReleaseNotesModal from './ReleaseNotesModal';
+import { TRACE_DB_LABELS, type TraceEnvSummary } from '@/lib/trace-env-key';
 
 /**
  * The standing chrome. In QMS the Accounts panel was a modal launched from the
@@ -24,7 +25,7 @@ export default function AppShell({
   version,
 }: {
   children: React.ReactNode;
-  active: 'accounts' | 'staff' | 'credits' | 'presentations' | 'usage' | 'audit' | 'disaster-recovery' | 'iso27001' | 'handbook';
+  active: 'accounts' | 'staff' | 'credits' | 'environment' | 'presentations' | 'usage' | 'audit' | 'disaster-recovery' | 'iso27001' | 'handbook';
   userEmail: string;
   /** From `appVersion()`, read server-side — see `lib/version.ts`. */
   version: string;
@@ -33,6 +34,24 @@ export default function AppShell({
   const pathname = usePathname();
   const [showNotes, setShowNotes] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [env, setEnv] = useState<TraceEnvSummary | null>(null);
+
+  // Which traceability environment every trace call goes to (Fly / AWS Staging / AWS Production).
+  // Shown on every page so nobody edits licences in staging believing it is production.
+  useEffect(() => {
+    let alive = true;
+    const read = () =>
+      fetch('/api/settings/trace-environment?summary=1', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => alive && setEnv(d))
+        .catch(() => {});
+    read();
+    window.addEventListener('trace-env-changed', read);
+    return () => {
+      alive = false;
+      window.removeEventListener('trace-env-changed', read);
+    };
+  }, []);
 
   // A nav click on mobile navigates, but React doesn't unmount the shell —
   // close the drawer manually when the URL changes so the user actually sees
@@ -119,6 +138,12 @@ export default function AppShell({
             Credits
           </Link>
           <Link
+            href="/environment"
+            className={`app-nav-item ${active === 'environment' ? 'app-nav-item--active' : ''}`}
+          >
+            Environment
+          </Link>
+          <Link
             href="/presentations"
             className={`app-nav-item ${active === 'presentations' ? 'app-nav-item--active' : ''}`}
           >
@@ -157,6 +182,17 @@ export default function AppShell({
         </nav>
 
         <div className="app-sidebar-footer">
+          {env && (
+            <Link
+              href="/environment"
+              className={`env-banner ${env.production ? '' : 'env-banner--warn'}`}
+              title="Traceability environment this console reads and writes — click to change"
+            >
+              <span className="env-banner-k">Traceability</span>
+              <span>{env.label.replace(/\s*\+.*$/, '')}</span>
+              <span className="env-banner-db">{TRACE_DB_LABELS[env.db]}</span>
+            </Link>
+          )}
           <div className="app-user">{userEmail}</div>
           <button className="app-nav-item" onClick={signOut}>
             Sign out

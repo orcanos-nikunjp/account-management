@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import AccountManageModal from './AccountManageModal';
 import CreateAccountModal from './CreateAccountModal';
 import { isRegulatoryModule, MODULES } from '@/lib/module-catalog';
-import { APP_URLS, REGION_LABELS, coerceRegion } from '@/lib/regions';
+import { ASK_PAUL_URLS, REGION_LABELS, coerceRegion } from '@/lib/regions';
 import { ACCOUNT_KINDS, kindKeyOf, kindLabel, readKindFilter, writeKindFilter, type KindFilter } from '@/lib/account-kind-key';
 import type { AccountKind, MergedAccountRow, ModuleKey, TraceSourceStatus } from '@/lib/types';
 
@@ -180,6 +180,7 @@ export default function AccountsClient() {
       {trace?.message && (
         <div className={`acl-notice ${trace.available ? '' : 'acl-notice--warn'}`}>
           <strong>Traceability:</strong> {trace.message}
+          {trace.environment && <span className="acl-notice-src"> — {trace.environment.label}</span>}
           {trace.url && <span className="acl-notice-src"> — {trace.url}</span>}
         </div>
       )}
@@ -336,8 +337,8 @@ export default function AccountsClient() {
                           can actually be shown — the old row offered a different
                           set of buttons per account with nothing explaining why. */}
                       <div className="acl-row-actions">
-                        <OpenLink label="Ask Paul" row={row} app="ask_paul" />
-                        <OpenLink label="Traceability" row={row} app="traceability" />
+                        <OpenLink label="Ask Paul" row={row} app="ask_paul" trace={trace} />
+                        <OpenLink label="Traceability" row={row} app="traceability" trace={trace} />
                         <button
                           className="btn-icon"
                           onClick={() => setManage(row)}
@@ -767,13 +768,16 @@ function OpenLink({
   label,
   row,
   app,
+  trace,
 }: {
   label: string;
   row: MergedAccountRow;
   app: 'ask_paul' | 'traceability';
+  /** The Traceability link moves with the active environment (Fly → AWS). */
+  trace: TraceSourceStatus | null;
 }) {
   const region = coerceRegion(row.region);
-  const url = APP_URLS[region][app];
+  const url = app === 'ask_paul' ? ASK_PAUL_URLS[region] : (trace?.app_urls?.[region] ?? null);
   const where = region.toUpperCase();
   if (!url) {
     return (

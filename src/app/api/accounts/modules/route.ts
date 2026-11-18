@@ -221,7 +221,7 @@ export async function PUT(req: Request) {
       wrote.push('the QMS AI account');
     }
 
-    if (tenant && traceConfigured()) {
+    if (tenant && (await traceConfigured())) {
       try {
         const rows = await listTraceAccounts();
         const current = rows.find((r) => r.account.toLowerCase() === tenant);
@@ -299,9 +299,9 @@ export async function PUT(req: Request) {
       { status: 409 },
     );
   }
-  if (!traceConfigured()) {
+  if (!(await traceConfigured())) {
     return Response.json(
-      { detail: 'Traceability is not connected (TRACE_API_URL / TRACE_ADMIN_PASSWORD).' },
+      { detail: 'Traceability is not connected in the active environment (see the Environment screen).' },
       { status: 503 },
     );
   }

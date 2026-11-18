@@ -200,8 +200,8 @@ export default function BackupsClient() {
             </div>
           ))}
           <p className="acl-hint">
-            Not covered by this screen: Traceability backups (Litestream and Fly snapshots — check them with{' '}
-            <code>fly</code>), and escrow of <code>ENCRYPTION_KEY</code>. Losing that key makes every stored
+            Not covered by this screen: Traceability backups (on Fly.io: Litestream and Fly snapshots — check them with{' '}
+            <code>fly</code>; on AWS: the PostgreSQL backups of that environment), and escrow of <code>ENCRYPTION_KEY</code>. Losing that key makes every stored
             credential unreadable. See DISASTER_RECOVERY.md §3.2 and §6.3.
           </p>
         </div>

@@ -53,7 +53,7 @@ export const dynamic = 'force-dynamic';
 
 function notConnected() {
   return Response.json(
-    { detail: 'Traceability is not connected (TRACE_API_URL / TRACE_ADMIN_PASSWORD).' },
+    { detail: 'Traceability is not connected in the active environment (see the Environment screen).' },
     { status: 503 },
   );
 }
@@ -70,7 +70,7 @@ function failed(e: unknown) {
 export async function GET(_req: Request, ctx: { params: Promise<{ tenant: string }> }) {
   const { error } = await requirePlatformStaff();
   if (error) return error;
-  if (!traceConfigured()) return notConnected();
+  if (!(await traceConfigured())) return notConnected();
 
   const { tenant } = await ctx.params;
   const name = tenant.toLowerCase();
@@ -146,7 +146,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ tenant: string
 export async function PUT(req: Request, ctx: { params: Promise<{ tenant: string }> }) {
   const { user, error } = await requirePlatformStaff();
   if (error) return error;
-  if (!traceConfigured()) return notConnected();
+  if (!(await traceConfigured())) return notConnected();
 
   const { tenant } = await ctx.params;
   const name = tenant.toLowerCase();
@@ -396,7 +396,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ tenant: string 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ tenant: string }> }) {
   const { user, error } = await requirePlatformStaff();
   if (error) return error;
-  if (!traceConfigured()) return notConnected();
+  if (!(await traceConfigured())) return notConnected();
 
   const { tenant } = await ctx.params;
   const name = tenant.toLowerCase();

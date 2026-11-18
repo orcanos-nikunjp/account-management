@@ -23,7 +23,8 @@ import { mergeAccounts } from '@/lib/modules';
 import { kindKeyOf } from '@/lib/account-kind-key';
 import { listAccountKinds } from '@/lib/account-kind';
 import { NEW_ACCOUNT_REGULATORY } from '@/lib/module-catalog';
-import { DEFAULT_REGION, parseRegion, traceApiUrlFor } from '@/lib/regions';
+import { DEFAULT_REGION, parseRegion } from '@/lib/regions';
+import { activeTraceEnv } from '@/lib/trace-env';
 import {
   findTraceAccount,
   listTraceAccounts,
@@ -41,6 +42,7 @@ import {
   supportsModules,
   TraceApiError,
   traceConfigured,
+  traceRegions,
   upsertRegionDirectory,
   upsertTraceModules,
   type TraceAccountRow,
@@ -116,13 +118,25 @@ export async function GET() {
     supports_multi_language: false,
     supports_home: false,
     supports_sbom: false,
-    url: process.env.TRACE_API_URL ?? null,
+    url: null,
+    environment: null,
+    app_urls: { us: null, eu: null },
     message: '',
   };
+  try {
+    const env = await activeTraceEnv();
+    trace.environment = { key: env.key, label: env.label, db: env.db };
+    trace.url = env.regions.us.api_url ?? env.regions.eu.api_url;
+    trace.app_urls = { us: env.regions.us.app_url, eu: env.regions.eu.app_url };
+  } catch (e) {
+    console.error('[GET /api/accounts] could not read the traceability environment:', e);
+  }
 
-  if (!traceConfigured()) {
+  if (!(await traceConfigured().catch(() => false))) {
     trace.message =
-      'Traceability is not connected. Set TRACE_API_URL and TRACE_ADMIN_PASSWORD to merge its accounts.';
+      `Traceability is not connected in the active environment` +
+      `${trace.environment ? ` (${trace.environment.label})` : ''}. ` +
+      'Set its admin API URL and password on the Environment screen.';
   } else {
     try {
       traceRows = await listTraceAccounts();
@@ -260,13 +274,13 @@ export async function POST(req: Request) {
   // the US, recorded in master as living in the EU, with nothing anywhere
   // reporting the contradiction. That is the precise failure this whole feature
   // exists to prevent, so it is refused rather than half-done.
-  if (region === 'eu' && !traceApiUrlFor('eu')) {
+  if (region === 'eu' && !(await traceRegions()).includes('eu')) {
     return Response.json(
       {
         detail:
-          'The EU region is not available yet: TRACE_API_URL_EU is not configured, so there ' +
-          'is no EU traceability instance to hold this tenant. Creating the account now would ' +
-          'put its data in the US while recording it as EU. Deploy the EU Fly app first.',
+          'The EU region is not available: the active traceability environment has no EU ' +
+          'instance configured (Environment screen), so there is nowhere to hold this tenant. ' +
+          'Creating the account now would put its data in the US while recording it as EU.',
       },
       { status: 400 },
     );

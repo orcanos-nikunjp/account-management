@@ -176,7 +176,7 @@ export async function POST(req: Request) {
     }
   };
 
-  if (tenant && traceConfigured()) {
+  if (tenant && (await traceConfigured())) {
     const t = tenant;
     await run('Traceability data', async () => {
       const row = await findTraceAccount(t);

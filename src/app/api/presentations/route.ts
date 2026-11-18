@@ -15,9 +15,9 @@ export async function GET(req: Request) {
   const { error } = await requirePlatformStaff();
   if (error) return error;
   const url = new URL(req.url);
-  const regions = traceRegions();
+  const regions = (await traceRegions());
   if (!regions.length) {
-    return Response.json({ detail: 'Traceability is not connected (TRACE_API_URL / TRACE_ADMIN_PASSWORD).' }, { status: 503 });
+    return Response.json({ detail: 'Traceability is not connected in the active environment (see the Environment screen).' }, { status: 503 });
   }
   const want = url.searchParams.get('region') as DataRegion | null;
   const region = want && regions.includes(want) ? want : regions[0];

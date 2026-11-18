@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.13.0",
+    "date": "2026-11-18",
+    "changes": [
+      "✨ **Traceability environment switch.** A new *Environment* page chooses which Traceability environment the console works with during the move to AWS: Fly.io + SQLite, AWS Staging + PostgreSQL, or AWS Production + PostgreSQL. All accounts move with it.",
+      "✨ **Set the addresses and passwords yourself.** Each environment has its own admin address, admin password and user link per region (US / EU), with a *Test connection* button that works before you switch.",
+      "✨ **Always see where you are.** The sidebar shows the active Traceability environment on every page, in amber when it is not production."
+    ]
+  },
+  {
     "version": "1.12.0",
     "date": "2026-11-13",
     "changes": [
