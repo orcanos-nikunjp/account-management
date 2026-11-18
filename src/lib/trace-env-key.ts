@@ -7,7 +7,7 @@
  * instances (admin API URL + its own admin password) plus the URL users open:
  *
  *   fly          Fly.io + SQLite        the current production (traceability.orcanos.ai)
- *   aws_staging  AWS Staging + Postgres stage.orcanos.com
+ *   aws_staging  AWS Staging + Postgres stage.orcanos.com (EU only)
  *   aws_prod     AWS Production + Postgres ushub.orcanos.com (US), hub.orcanos.com (EU)
  *
  * All tenants move at once (one database per environment), so there is no per-account
@@ -102,8 +102,10 @@ export const TRACE_ENV_DEFAULTS: StoredTraceEnvs = {
       db: 'postgres',
       note: '',
       regions: {
-        us: inst('https://stage.orcanos.com', 'https://stage.orcanos.com'),
-        eu: inst('', ''),
+        // Staging is EU-only (stage.orcanos.com, 2026-11-18): no US instance, so US accounts
+        // are absent while staging is active and creating a US account there is refused.
+        us: inst('', ''),
+        eu: inst('https://stage.orcanos.com', 'https://stage.orcanos.com'),
       },
     },
     aws_prod: {

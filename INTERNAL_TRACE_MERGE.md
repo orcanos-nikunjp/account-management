@@ -387,7 +387,7 @@ into master — a sync job that can drift, which is why it was not taken.
 ## Traceability environment switch (1.13.0, 2026-11-18)
 
 The trace instance is no longer only `TRACE_API_URL(_EU)`: the console talks to the **active
-traceability environment** — Fly.io + SQLite, AWS Staging + PostgreSQL (`stage.orcanos.com`) or AWS
+traceability environment** — Fly.io + SQLite, AWS Staging + PostgreSQL (`stage.orcanos.com`, EU only) or AWS
 Production + PostgreSQL (`ushub.orcanos.com` US, `hub.orcanos.com` EU) — chosen on `/environment` and
 stored in master `platform_settings` `trace_environments`. The env vars remain the Fly fallback. All
 of `lib/trace.ts` routes through `target()`; see CLAUDE.md → *Traceability environment*. Open: the AWS

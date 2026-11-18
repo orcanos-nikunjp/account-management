@@ -493,7 +493,7 @@ deployment. Until the active environment has an EU instance, `POST /api/accounts
 
 Traceability is moving from Fly.io + SQLite to the Orcanos AWS environment + PostgreSQL. `/environment`
 picks **one active environment for everyone**: `fly` (Fly.io + SQLite), `aws_staging`
-(`stage.orcanos.com`), `aws_prod` (`ushub.orcanos.com` = US, `hub.orcanos.com` = EU). Each has, per
+(`stage.orcanos.com`, **EU only** — US accounts are absent and US creates refused while it is active), `aws_prod` (`ushub.orcanos.com` = US, `hub.orcanos.com` = EU). Each has, per
 region, an admin API URL, an admin password (AES-GCM, never returned) and the user-facing app URL.
 Stored in master `platform_settings` key `trace_environments` (`lib/trace-env.ts`, shapes in
 client-safe `lib/trace-env-key.ts`); every trace call resolves it (15 s cache per instance).

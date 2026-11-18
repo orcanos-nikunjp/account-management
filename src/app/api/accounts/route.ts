@@ -274,13 +274,17 @@ export async function POST(req: Request) {
   // the US, recorded in master as living in the EU, with nothing anywhere
   // reporting the contradiction. That is the precise failure this whole feature
   // exists to prevent, so it is refused rather than half-done.
-  if (region === 'eu' && !(await traceRegions()).includes('eu')) {
+  // Same for US since 1.13.0: AWS Staging is EU-only, so a US account created while staging is
+  // active has no instance to hold its row. (With NO environment configured at all, a US create
+  // still goes ahead without a trace row — the pre-1.13.0 behaviour.)
+  const liveRegions = await traceRegions();
+  if (!liveRegions.includes(region) && (region === 'eu' || liveRegions.length > 0)) {
     return Response.json(
       {
         detail:
-          'The EU region is not available: the active traceability environment has no EU ' +
-          'instance configured (Environment screen), so there is nowhere to hold this tenant. ' +
-          'Creating the account now would put its data in the US while recording it as EU.',
+          `The ${region.toUpperCase()} region is not available: the active traceability environment has no ` +
+          `${region.toUpperCase()} instance configured (Environment screen), so there is nowhere to hold this ` +
+          'tenant. Switch environment or add that region first.',
       },
       { status: 400 },
     );
